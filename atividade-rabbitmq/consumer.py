@@ -18,20 +18,41 @@ canal.queue_declare(
 canal.basic_qos(prefetch_count=1)
 
 
+
+# Guarda os IDs que já falharam na primeira tentativa.
+falhas_simuladas = set()
+
+
 def processar_mensagem(canal, metodo, propriedades, corpo):
     pedido = json.loads(corpo.decode("utf-8"))
+    pedido_id = pedido["id"]
 
     print(
-        f"[{datetime.now()}] "
-        f"Pedido ID={pedido['id']} | "
-        f"Cliente={pedido['cliente']} | "
-        f"Valor=R${pedido['valor']:.2f}"
+        f"Recebido ID={pedido_id} | "
+        f"Redelivery={metodo.redelivered}"
     )
 
-    # Confirma que o processamento terminou.
+    if pedido_id not in falhas_simuladas:
+        falhas_simuladas.add(pedido_id)
+
+        print("Falha simulada! Devolvendo mensagem à fila.")
+
+        canal.basic_nack(
+            delivery_tag=metodo.delivery_tag,
+            requeue=True
+        )
+        return
+
+    print(
+        f"Processamento concluído: "
+        f"cliente={pedido['cliente']}, "
+        f"valor=R${pedido['valor']:.2f}"
+    )
+
     canal.basic_ack(
         delivery_tag=metodo.delivery_tag
     )
+
 
 
 canal.basic_consume(
